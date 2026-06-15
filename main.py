@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import sys
 from collections import Counter
@@ -38,7 +39,7 @@ class UserAccount:
         self.transaction_history = []
     
     def deposit(self, amount: float) -> None:
-        if amount <= 0: raise ValueError("Deposit amount must be positive.")
+        if not math.isfinite(amount) or amount <= 0: raise ValueError("Deposit amount must be a positive number.")
         self.balance += amount
         self.transaction_history.append({
             "type": "deposit",
@@ -47,7 +48,7 @@ class UserAccount:
         })
     
     def withdraw(self, amount: float) -> None:
-        if amount <= 0: raise ValueError("Withdrawal amount must be positive.")
+        if not math.isfinite(amount) or amount <= 0: raise ValueError("Withdrawal amount must be a positive number.")
         if amount > self.balance: raise ValueError("Insufficient balance.")
         self.balance -= amount
         self.transaction_history.append({
@@ -57,7 +58,7 @@ class UserAccount:
         })
     
     def transfer(self, amount: float, recipient_account) -> None:
-        if amount <= 0: raise ValueError("Transfer amount must be positive.")
+        if not math.isfinite(amount) or amount <= 0: raise ValueError("Transfer amount must be a positive number.")
         if amount > self.balance: raise ValueError("Insufficient balance.")
         self.balance -= amount
         recipient_account.balance += amount
@@ -114,7 +115,7 @@ def user_session(user: UserAccount, accounts: dict) -> None:
     status = ""
     while True:
         render_header(
-            title=f"Bank of Bankers — {user.username}",
+            title=f"Banking App - {user.username}",
             subtitle="Logged in (Ctrl+C to exit app)"
         )
         if status:
@@ -220,7 +221,7 @@ def user_session(user: UserAccount, accounts: dict) -> None:
                 except Exception as e:
                     status = f"Transfer failed: {e}"
         elif choice == '5':
-            render_header(title=f"{user.username} — Transactions")
+            render_header(title=f"{user.username} - Transactions")
             if not user.transaction_history:
                 print("No transactions yet.")
             else:
@@ -252,7 +253,7 @@ def main() -> None:
     try:
         with open('accounts.json', 'r') as f:
             accounts_data = json.load(f)
-    except FileNotFoundError:
+    except (FileNotFoundError, json.JSONDecodeError):
         accounts_data = {}
     
     accounts = {}
@@ -268,7 +269,7 @@ def main() -> None:
     status = ""
     while True:
         render_header(
-            title="Bank of Bankers",
+            title="Banking App",
             subtitle="Main Menu (Ctrl+C to exit app)"
         )
         if status:
@@ -297,28 +298,31 @@ def main() -> None:
             username = input("Choose a username (or 'b' to back): ").strip()
             if username.lower() in ('b', 'back'):
                 continue
+            if not username:
+                status = "Username cannot be empty."
+                continue
+            if any(ch.isdigit() for ch in username):
+                status = "Username cannot contain numbers."
+                continue
             if username in accounts:
                 status = "Username already exists."
                 continue
             password = getpass("Choose a password (or 'b' to back): ").strip()
             if password.lower() in ('b', 'back'):
                 continue
-            try:
-                pin = getpass("Choose a 4-digit PIN: ").strip()
-            except ValueError:
-                status = "PIN must be numeric."
+            if not password:
+                status = "Password cannot be empty."
                 continue
-            
+            pin = getpass("Choose a 4-digit PIN (or 'b' to back): ").strip()
+            if pin.lower() in ('b', 'back'):
+                continue
+            if not pin.isdigit() or len(pin) != 4:
+                status = "PIN must be a 4-digit number."
+                continue
+
             new_account = UserAccount(username, password, pin)
             accounts[username] = new_account
-            accounts_data[username] = {
-                'password': password,
-                'pin': pin,
-                'balance': 0.0,
-                'transaction_history': []
-            }
-            with open('accounts.json', 'w') as f:
-                json.dump(accounts_data, f, indent=4)
+            _save_accounts(accounts)
             status = f"Account created for {username}!"
         else:
             status = "Invalid choice."
